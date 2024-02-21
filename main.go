@@ -1,78 +1,74 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
-
-	// Import the PNG package for decoding
 	"image/jpeg"
 	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/nfnt/resize"
 )
 
-// compressAndConvertImage resizes a PNG image and converts it to JPEG.
-func compressAndConvertImage(inputPath, outputPath string, maxHeight uint, jpegQuality int) error {
-	// Open the input image
+func compressAndConvertImage(inputPath, outputPath string, maxHeight uint, jpegQuality int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	inputFile, err := os.Open(inputPath)
 	if err != nil {
-		return err
+		fmt.Println("Error opening file:", err)
+		return
 	}
 	defer inputFile.Close()
 
-	// Decode the image
 	img, _, err := image.Decode(inputFile)
 	if err != nil {
-		return err
+		fmt.Println("Error decoding image:", err)
+		return
 	}
 
-	// Resize the image if it is taller than maxHeight
 	originalHeight := img.Bounds().Dy()
 	if uint(originalHeight) > maxHeight {
 		img = resize.Resize(0, maxHeight, img, resize.Lanczos3)
 	}
 
-	// Ensure the output directory exists
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		return err
+		fmt.Println("Error creating output directory:", err)
+		return
 	}
 
-	// Change the file extension to .jpg
 	outputPath = strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".jpg"
-
-	// Create the output file
 	outputFile, err := os.Create(outputPath)
 	if err != nil {
-		return err
+		fmt.Println("Error creating output file:", err)
+		return
 	}
 	defer outputFile.Close()
 
-	// Encode the image to JPEG format
 	jpegOpts := &jpeg.Options{Quality: jpegQuality}
 	if err := jpeg.Encode(outputFile, img, jpegOpts); err != nil {
-		return err
+		fmt.Println("Error encoding JPEG:", err)
+		return
 	}
 
 	fmt.Println("Processed and converted to JPEG:", outputPath)
-	return nil
 }
 
-// processDirectory processes each PNG image in a directory and subdirectories.
-func processDirectory(inputDir, outputDir string, maxHeight uint, jpegQuality int) error {
-	return filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
+func processDirectory(inputDir, outputDir string, maxHeight uint, jpegQuality int) {
+	var wg sync.WaitGroup
+
+	err := filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
 
-		// Check if file is a PNG image
 		if strings.HasSuffix(strings.ToLower(info.Name()), ".png") {
 			relPath, err := filepath.Rel(inputDir, path)
 			if err != nil {
@@ -80,20 +76,39 @@ func processDirectory(inputDir, outputDir string, maxHeight uint, jpegQuality in
 			}
 
 			outputPath := filepath.Join(outputDir, relPath)
-			return compressAndConvertImage(path, outputPath, maxHeight, jpegQuality)
+			wg.Add(1)
+			go compressAndConvertImage(path, outputPath, maxHeight, jpegQuality, &wg)
 		}
 
 		return nil
 	})
+
+	if err != nil {
+		fmt.Println("Error walking through directory:", err)
+	}
+
+	wg.Wait()
 }
 
 func main() {
-	inputDir := "EPIC41Fantasy" // Replace with your input directory
-	outputDir := "output"       // Replace with your output directory
-	maxHeight := uint(330)      // Maximum height of the images
-	jpegQuality := 90           // JPEG quality (1-100)
+	var (
+		inputDir    string
+		outputDir   string
+		maxHeight   uint
+		jpegQuality int
+	)
 
-	if err := processDirectory(inputDir, outputDir, maxHeight, jpegQuality); err != nil {
-		fmt.Println("Error processing directory:", err)
+	flag.StringVar(&inputDir, "i", "", "Path to the input directory")
+	flag.StringVar(&outputDir, "ot", "", "Path to the output directory")
+	flag.UintVar(&maxHeight, "h", 300, "Maximum height of the images")
+	flag.IntVar(&jpegQuality, "q", 80, "JPEG quality (1-100)")
+	flag.Parse()
+
+	if inputDir == "" || outputDir == "" {
+		fmt.Println("Input and output directories are required.")
+		flag.PrintDefaults()
+		return
 	}
+
+	processDirectory(inputDir, outputDir, maxHeight, jpegQuality)
 }
