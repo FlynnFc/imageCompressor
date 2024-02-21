@@ -4,6 +4,8 @@
 
 This tool is designed to automate the process of resizing PNG images and converting them to JPEG format, while preserving the directory structure of the input folder. It's built in Go and utilizes concurrency for efficient processing of large numbers of images.
 
+It was made as a replacement for https://squoosh.app/ which I used to manually convert and compress images
+
 ## Installation
 
 ### Prerequisites
@@ -15,7 +17,7 @@ This tool is designed to automate the process of resizing PNG images and convert
 1. Clone the repository to your local machine:
 
    ```sh
-   git clone https://github.com/FlynnFc/go-image-processing.git
+   git clone https://github.com/FlynnFc/imageCompressor.git
    ```
 
 2. Navigate to the cloned directory:
